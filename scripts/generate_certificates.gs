@@ -1,277 +1,659 @@
 /**
  * ============================================================
- *  NexHack Certificate Generator — Google Apps Script
+ * NexHack 2.0 — Certificate Generator
  * ============================================================
  *
- *  HOW TO USE
- *  ----------
- *  1. Open https://script.google.com  →  New Project
- *  2. Paste this entire file into Code.gs
- *  3. Fill in the SHEET_ID constant below (your Google Sheet ID)
- *  4. In the Sheet, make sure you have columns named exactly:
- *       "Member Name"  |  "Team Name"
- *     (case-sensitive, first row = header)
- *  5. Run  generateAllCertificates()
- *  6. On first run, authorize the requested scopes.
+ * PURPOSE:
+ * Generate personalized certificate PDFs and save them to
+ * a Google Drive folder.
  *
- *  WHAT IT DOES (per row)
- *  ----------------------
- *  • Copies the Slides template
- *  • Replaces {{MEMBER_NAME}} and {{TEAM_NAME}} placeholders
- *  • Exports the copy as a PDF
- *  • Saves the PDF to your Drive folder
- *  • Deletes the temporary Slides copy
- *  • Writes "GENERATED" in a Status column so you can track progress
+ * IMPORTANT:
+ * This script ONLY generates certificates.
  *
- *  PLACEHOLDER FORMAT
- *  ------------------
- *  In your Google Slides template, use these exact text strings:
- *    {{MEMBER_NAME}}   — will be replaced with the participant's name
- *    {{TEAM_NAME}}     — will be replaced with the team name
- *  You can add more placeholders by editing the replacements object below.
+ * It DOES NOT:
+ * - Send emails
+ * - Validate email addresses
+ * - Update the Google Sheet
+ * - Change participant status
+ * - Modify participant data
+ *
+ *
+ * SHEET COLUMNS:
+ *   Team Name
+ *   Member Name
+ *   Member Email
+ *   Member Phone Number
+ *   Status
+ *
+ *
+ * TEMPLATE PLACEHOLDER:
+ *   {{ParticipantName}}
+ *
+ *
+ * OUTPUT FILENAME:
+ *   {memberName}{teamName}.pdf
+ *
+ * Example:
+ *
+ *   Member Name: Danvir Js
+ *   Team Name:   PIXEL THINGS
+ *
+ *   Output:
+ *   danvirjspixelthings.pdf
  * ============================================================
  */
 
-// ─── CONFIGURATION ──────────────────────────────────────────
-const TEMPLATE_ID = '1IcWXAyV5dc_B9UOoPZ86WYSnRkgq6t8tUx3_wrKnghk';   // Google Slides template
-const FOLDER_ID   = '1p8KYU5ldarei7C7f_BKUhNYNAFFcjcet';               // Drive folder for PDFs
-const SHEET_ID    = '1NGGGqPcZYirHHO2l1JnqZ5tNgvF9O82XsC5rPCvRQKo';  // ← paste your Google Sheet ID here
-// ─────────────────────────────────────────────────────────────
+
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
+const TEMPLATE_ID =
+  '1h22vkEb........';
+
+const FOLDER_ID =
+  '1aKV8bV6........';
+
+const SHEET_ID =
+  '1ACsnTxP........';
 
 
-/**
- * Main entry point — generates certificates for every row in the sheet.
- */
+// ============================================================
+// MAIN FUNCTION
+// ============================================================
+
 function generateAllCertificates() {
+
   if (!SHEET_ID) {
-    throw new Error('⛔ SHEET_ID is empty. Paste your Google Sheet ID into the SHEET_ID constant.');
-  }
-
-  const sheet  = SpreadsheetApp.openById(SHEET_ID).getSheets()[0];
-  const data   = sheet.getDataRange().getValues();
-  const headers = data[0].map(h => String(h).trim());
-
-  // Locate columns
-  const nameCol   = headers.indexOf('Member Name');
-  const teamCol   = headers.indexOf('Team Name');
-
-  if (nameCol === -1 || teamCol === -1) {
     throw new Error(
-      '⛔ Could not find required columns. Make sure your sheet header row contains ' +
-      '"Member Name" and "Team Name" (case-sensitive).'
+      'SHEET_ID is empty.'
     );
   }
 
-  // Add a "Status" column if it doesn't exist
-  let statusCol = headers.indexOf('Status');
-  if (statusCol === -1) {
-    statusCol = headers.length;
-    sheet.getRange(1, statusCol + 1).setValue('Status');
+
+  // ----------------------------------------------------------
+  // Open spreadsheet
+  // ----------------------------------------------------------
+
+  const sheet =
+    SpreadsheetApp
+      .openById(SHEET_ID)
+      .getSheets()[0];
+
+
+  const data =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (data.length < 2) {
+    throw new Error(
+      'No participant data found.'
+    );
   }
 
-  const folder = DriveApp.getFolderById(FOLDER_ID);
-  let generated = 0;
-  let skipped   = 0;
-  let failed    = 0;
 
-  // Process each participant (skip header row)
-  for (let i = 1; i < data.length; i++) {
-    const memberName = String(data[i][nameCol] || '').trim();
-    const teamName   = String(data[i][teamCol] || '').trim();
+  // ----------------------------------------------------------
+  // Read headers
+  // ----------------------------------------------------------
+
+  const headers =
+    data[0].map(header =>
+      String(header).trim()
+    );
+
+
+  const nameCol =
+    headers.indexOf('Member Name');
+
+  const teamCol =
+    headers.indexOf('Team Name');
+
+  const statusCol =
+    headers.indexOf('Status');
+
+
+  if (nameCol === -1) {
+    throw new Error(
+      'Could not find "Member Name" column.'
+    );
+  }
+
+
+  if (teamCol === -1) {
+    throw new Error(
+      'Could not find "Team Name" column.'
+    );
+  }
+
+
+  if (statusCol === -1) {
+    throw new Error(
+      'Could not find "Status" column.'
+    );
+  }
+
+
+  // ----------------------------------------------------------
+  // Get destination Drive folder
+  // ----------------------------------------------------------
+
+  const folder =
+    DriveApp.getFolderById(FOLDER_ID);
+
+
+  let generated = 0;
+  let skippedByStatus = 0;
+  let skippedExisting = 0;
+  let skippedEmptyName = 0;
+  let failed = 0;
+
+
+  // ==========================================================
+  // PROCESS PARTICIPANTS
+  // ==========================================================
+
+  for (
+    let i = 1;
+    i < data.length;
+    i++
+  ) {
+
+    const memberName =
+      String(
+        data[i][nameCol] || ''
+      ).trim();
+
+
+    const teamName =
+      String(
+        data[i][teamCol] || ''
+      ).trim();
+
+
+    const currentStatus =
+      String(
+        data[i][statusCol] || ''
+      )
+        .trim()
+        .toUpperCase();
+
+
+    // ========================================================
+    // 1. EMPTY NAME
+    // ========================================================
 
     if (!memberName) {
-      Logger.log(`Row ${i + 1}: Skipped (empty name)`);
-      skipped++;
+
+      Logger.log(
+        `Row ${i + 1}: Skipped — empty Member Name`
+      );
+
+      skippedEmptyName++;
+
       continue;
     }
 
-    // Check if already generated
-    const currentStatus = String(data[i][statusCol] || '').trim().toUpperCase();
-    if (currentStatus === 'GENERATED' || currentStatus === 'SENT') {
-      Logger.log(`Row ${i + 1}: Skipped "${memberName}" (status: ${currentStatus})`);
-      skipped++;
+
+    // ========================================================
+    // 2. STATUS CHECK
+    // ========================================================
+    //
+    // IMPORTANT:
+    //
+    // SENT   → NEVER generate
+    // FAILED → NEVER generate
+    //
+    // The Sheet is ONLY READ.
+    // Nothing is written back to it.
+    //
+
+    if (
+      currentStatus === 'SENT' ||
+      currentStatus === 'FAILED'
+    ) {
+
+      Logger.log(
+        `Row ${i + 1}: Skipped "${memberName}" — status: ${currentStatus}`
+      );
+
+      skippedByStatus++;
+
       continue;
     }
+
+
+    // ========================================================
+    // 3. CHECK WHETHER CERTIFICATE ALREADY EXISTS
+    // ========================================================
+    //
+    // This protects against duplicate certificates.
+    //
+    // Example:
+    //
+    // danvirjspixelthings.pdf already exists
+    //
+    // → Do NOT generate another one.
+    //
+
+    const existingFile =
+      findExistingCertificate(
+        memberName,
+        teamName,
+        folder
+      );
+
+
+    if (existingFile) {
+
+      Logger.log(
+        `Row ${i + 1}: Certificate already exists for "${memberName}" — ${existingFile.getName()}`
+      );
+
+      skippedExisting++;
+
+      continue;
+    }
+
+
+    // ========================================================
+    // 4. GENERATE CERTIFICATE
+    // ========================================================
 
     try {
-      const pdfFile = generateCertificatePdf(memberName, teamName, folder);
-      Logger.log(`Row ${i + 1}: ✅ Generated "${pdfFile.getName()}" for ${memberName}`);
-      sheet.getRange(i + 1, statusCol + 1).setValue('GENERATED');
+
+      const pdfFile =
+        generateCertificatePdf(
+          memberName,
+          teamName,
+          folder
+        );
+
+
+      Logger.log(
+        `Row ${i + 1}: Generated "${pdfFile.getName()}" for "${memberName}"`
+      );
+
+
       generated++;
-    } catch (err) {
-      Logger.log(`Row ${i + 1}: ❌ FAILED for ${memberName} — ${err.message}`);
-      sheet.getRange(i + 1, statusCol + 1).setValue('FAILED');
+
+
+    } catch (error) {
+
+      Logger.log(
+        `Row ${i + 1}: FAILED to generate certificate for "${memberName}" — ${error.message}`
+      );
+
+
       failed++;
     }
 
-    // Small delay to avoid hitting API rate limits
+
+    // Small delay between generations
+    // to reduce the chance of Google API rate limiting.
     Utilities.sleep(1500);
   }
 
-  const summary = `\n🎉 Done!\n   Generated: ${generated}\n   Skipped:   ${skipped}\n   Failed:    ${failed}`;
+
+  // ==========================================================
+  // SUMMARY
+  // ==========================================================
+
+  const summary =
+    `Generated: ${generated}\n` +
+    `Skipped (SENT/FAILED): ${skippedByStatus}\n` +
+    `Skipped (already exists): ${skippedExisting}\n` +
+    `Skipped (empty name): ${skippedEmptyName}\n` +
+    `Failed: ${failed}`;
+
+
+  Logger.log(
+    '========================================'
+  );
+
+  Logger.log(
+    'Certificate generation complete'
+  );
+
   Logger.log(summary);
 
-  SpreadsheetApp.getUi().alert(
-    'Certificate Generation Complete',
-    `Generated: ${generated}\nSkipped: ${skipped}\nFailed: ${failed}`,
-    SpreadsheetApp.getUi().ButtonSet.OK
+  Logger.log(
+    '========================================'
+  );
+
+
+  SpreadsheetApp
+    .getUi()
+    .alert(
+      'Certificate Generation Complete',
+      summary,
+      SpreadsheetApp
+        .getUi()
+        .ButtonSet.OK
+    );
+}
+
+
+// ============================================================
+// FIND EXISTING CERTIFICATE
+// ============================================================
+
+function findExistingCertificate(
+  memberName,
+  teamName,
+  folder
+) {
+
+  const fileName =
+    normalizeCertificateFilename(
+      memberName,
+      teamName
+    );
+
+
+  const files =
+    folder.getFilesByName(fileName);
+
+
+  if (files.hasNext()) {
+    return files.next();
+  }
+
+
+  return null;
+}
+
+
+// ============================================================
+// GENERATE SINGLE CERTIFICATE
+// ============================================================
+
+function generateCertificatePdf(
+  memberName,
+  teamName,
+  folder
+) {
+
+  // ----------------------------------------------------------
+  // Get template
+  // ----------------------------------------------------------
+
+  const templateFile =
+    DriveApp.getFileById(
+      TEMPLATE_ID
+    );
+
+
+  // ----------------------------------------------------------
+  // Create temporary Slides copy
+  // ----------------------------------------------------------
+
+  const temporaryCopy =
+    templateFile.makeCopy(
+      `Certificate — ${memberName}`,
+      folder
+    );
+
+
+  const temporaryCopyId =
+    temporaryCopy.getId();
+
+
+  try {
+
+    // --------------------------------------------------------
+    // Open temporary presentation
+    // --------------------------------------------------------
+
+    const presentation =
+      SlidesApp.openById(
+        temporaryCopyId
+      );
+
+
+    const slides =
+      presentation.getSlides();
+
+
+    // --------------------------------------------------------
+    // Replace participant name
+    // --------------------------------------------------------
+
+    slides.forEach(slide => {
+
+      // ------------------------------------------------------
+      // Shapes
+      // ------------------------------------------------------
+
+      slide
+        .getShapes()
+        .forEach(shape => {
+
+          if (shape.getText) {
+
+            shape
+              .getText()
+              .replaceAllText(
+                '{{ParticipantName}}',
+                memberName
+              );
+          }
+        });
+
+
+      // ------------------------------------------------------
+      // Tables
+      // ------------------------------------------------------
+
+      slide
+        .getTables()
+        .forEach(table => {
+
+          for (
+            let row = 0;
+            row < table.getNumRows();
+            row++
+          ) {
+
+            for (
+              let column = 0;
+              column < table.getNumColumns();
+              column++
+            ) {
+
+              table
+                .getCell(row, column)
+                .getText()
+                .replaceAllText(
+                  '{{ParticipantName}}',
+                  memberName
+                );
+            }
+          }
+        });
+    });
+
+
+    // --------------------------------------------------------
+    // Save presentation
+    // --------------------------------------------------------
+
+    presentation.saveAndClose();
+
+
+    // --------------------------------------------------------
+    // Export as PDF
+    // --------------------------------------------------------
+
+    const pdfBlob =
+      exportSlidesAsPdf(
+        temporaryCopyId
+      );
+
+
+    // --------------------------------------------------------
+    // Generate final filename
+    // --------------------------------------------------------
+
+    const pdfFileName =
+      normalizeCertificateFilename(
+        memberName,
+        teamName
+      );
+
+
+    // --------------------------------------------------------
+    // Save PDF
+    // --------------------------------------------------------
+
+    const pdfFile =
+      folder.createFile(
+        pdfBlob.setName(
+          pdfFileName
+        )
+      );
+
+
+    return pdfFile;
+
+
+  } finally {
+
+    // --------------------------------------------------------
+    // Delete temporary Slides copy
+    // --------------------------------------------------------
+    //
+    // This DOES NOT delete the generated PDF.
+    //
+    // It only removes the temporary Google Slides
+    // presentation used to generate the PDF.
+    //
+
+    DriveApp
+      .getFileById(
+        temporaryCopyId
+      )
+      .setTrashed(true);
+  }
+}
+
+
+// ============================================================
+// EXPORT GOOGLE SLIDES AS PDF
+// ============================================================
+
+function exportSlidesAsPdf(
+  presentationId
+) {
+
+  const url =
+    `https://www.googleapis.com/drive/v3/files/` +
+    `${presentationId}/export?mimeType=application/pdf`;
+
+
+  const response =
+    UrlFetchApp.fetch(
+      url,
+      {
+        headers: {
+          Authorization:
+            'Bearer ' +
+            ScriptApp.getOAuthToken()
+        },
+
+        muteHttpExceptions: true
+      }
+    );
+
+
+  const responseCode =
+    response.getResponseCode();
+
+
+  if (responseCode !== 200) {
+
+    throw new Error(
+      `PDF export failed. HTTP ${responseCode}: ` +
+      response.getContentText()
+    );
+  }
+
+
+  return response
+    .getBlob()
+    .setContentType(
+      'application/pdf'
+    );
+}
+
+
+// ============================================================
+// CERTIFICATE FILENAME
+// ============================================================
+
+/**
+ * Converts:
+ *
+ *   Danvir Js
+ *   PIXEL THINGS
+ *
+ * Into:
+ *
+ *   danvirjspixelthings.pdf
+ */
+
+function normalizeCertificateFilename(
+  memberName,
+  teamName
+) {
+
+  const cleanName =
+    normalizeTextForFilename(
+      memberName
+    );
+
+
+  const cleanTeam =
+    normalizeTextForFilename(
+      teamName
+    );
+
+
+  return (
+    `${cleanName}${cleanTeam}.pdf`
   );
 }
 
 
-/**
- * Generates a single certificate PDF and saves it to the target folder.
- *
- * @param {string} memberName  — participant's full name
- * @param {string} teamName    — team name
- * @param {Folder} folder      — destination Drive folder
- * @returns {File}             — the created PDF file
- */
-function generateCertificatePdf(memberName, teamName, folder) {
-  // 1️⃣  Copy the template
-  const templateFile = DriveApp.getFileById(TEMPLATE_ID);
-  const tempCopy     = templateFile.makeCopy(`Certificate — ${memberName}`, folder);
-  const tempCopyId   = tempCopy.getId();
+// ============================================================
+// NORMALIZE FILENAME
+// ============================================================
 
-  try {
-    // 2️⃣  Open copy as a Presentation and replace placeholders
-    const presentation = SlidesApp.openById(tempCopyId);
-    const slides       = presentation.getSlides();
+function normalizeTextForFilename(
+  text
+) {
 
-    // Define all placeholder → value mappings here
-    const replacements = {
-      '{{MEMBER_NAME}}': memberName,
-      '{{TEAM_NAME}}':   teamName,
-    };
-
-    slides.forEach(slide => {
-      slide.getShapes().forEach(shape => {
-        if (shape.getText) {
-          const textRange = shape.getText();
-          for (const [placeholder, value] of Object.entries(replacements)) {
-            textRange.replaceAllText(placeholder, value);
-          }
-        }
-      });
-
-      // Also check tables (some templates use them for layout)
-      slide.getTables().forEach(table => {
-        for (let r = 0; r < table.getNumRows(); r++) {
-          for (let c = 0; c < table.getNumColumns(); c++) {
-            const cell = table.getCell(r, c);
-            for (const [placeholder, value] of Object.entries(replacements)) {
-              cell.getText().replaceAllText(placeholder, value);
-            }
-          }
-        }
-      });
-    });
-
-    presentation.saveAndClose();
-
-    // 3️⃣  Export the Slides copy as PDF
-    const pdfBlob = exportSlidesAsPdf(tempCopyId);
-
-    // 4️⃣  Create the PDF with the same naming convention as your Next.js app
-    const pdfFileName = normalizeName(memberName, teamName);
-    const pdfFile     = folder.createFile(pdfBlob.setName(pdfFileName));
-
-    return pdfFile;
-
-  } finally {
-    // 5️⃣  Always clean up the temporary Slides copy
-    DriveApp.getFileById(tempCopyId).setTrashed(true);
-  }
+  return String(text)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9]/g, '');
 }
 
 
-/**
- * Exports a Google Slides presentation as a PDF blob.
- * Uses the Drive API export endpoint.
- */
-function exportSlidesAsPdf(presentationId) {
-  const url = `https://www.googleapis.com/drive/v3/files/${presentationId}/export?mimeType=application/pdf`;
+// ============================================================
+// GOOGLE SHEETS MENU
+// ============================================================
 
-  const response = UrlFetchApp.fetch(url, {
-    headers: {
-      Authorization: 'Bearer ' + ScriptApp.getOAuthToken(),
-    },
-    muteHttpExceptions: true,
-  });
-
-  if (response.getResponseCode() !== 200) {
-    throw new Error(`PDF export failed (HTTP ${response.getResponseCode()}): ${response.getContentText()}`);
-  }
-
-  return response.getBlob().setContentType('application/pdf');
-}
-
-
-/**
- * Normalizes a filename to match the convention used in your Next.js app:
- *   "John Doe" + "Team Alpha" → "johndoeteamalpha.pdf"
- */
-function normalizeName(name, team) {
-  const cleanName = name.replace(/\s+/g, '').toLowerCase();
-  const cleanTeam = team.replace(/\s+/g, '').toLowerCase();
-  return `${cleanName}${cleanTeam}.pdf`;
-}
-
-
-// ─── OPTIONAL: Menu in the Sheet UI ─────────────────────────
-/**
- * Adds a custom menu when the Sheet is opened.
- * To use this, go to Extensions → Apps Script in your Sheet,
- * then paste this code there (instead of script.google.com).
- */
 function onOpen() {
-  SpreadsheetApp.getUi()
+
+  SpreadsheetApp
+    .getUi()
     .createMenu('🎓 Certificates')
-    .addItem('Generate All Certificates', 'generateAllCertificates')
-    .addItem('Generate Selected Row Only', 'generateSelectedRow')
+    .addItem(
+      'Generate All Certificates',
+      'generateAllCertificates'
+    )
     .addToUi();
-}
-
-
-/**
- * Generates a certificate for only the currently selected row.
- */
-function generateSelectedRow() {
-  const sheet     = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  const row       = sheet.getActiveRange().getRow();
-  const headers   = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-  const rowData   = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
-
-  const nameCol   = headers.indexOf('Member Name');
-  const teamCol   = headers.indexOf('Team Name');
-
-  if (nameCol === -1 || teamCol === -1) {
-    SpreadsheetApp.getUi().alert('Missing "Member Name" or "Team Name" columns.');
-    return;
-  }
-
-  let statusCol = headers.indexOf('Status');
-  if (statusCol === -1) {
-    statusCol = headers.length;
-    sheet.getRange(1, statusCol + 1).setValue('Status');
-  }
-
-  const memberName = String(rowData[nameCol] || '').trim();
-  const teamName   = String(rowData[teamCol] || '').trim();
-
-  if (!memberName) {
-    SpreadsheetApp.getUi().alert('Selected row has no Member Name.');
-    return;
-  }
-
-  const folder = DriveApp.getFolderById(FOLDER_ID);
-
-  try {
-    const pdfFile = generateCertificatePdf(memberName, teamName, folder);
-    sheet.getRange(row, statusCol + 1).setValue('GENERATED');
-    SpreadsheetApp.getUi().alert(`✅ Certificate generated!\n\nFile: ${pdfFile.getName()}`);
-  } catch (err) {
-    sheet.getRange(row, statusCol + 1).setValue('FAILED');
-    SpreadsheetApp.getUi().alert(`❌ Failed: ${err.message}`);
-  }
 }
