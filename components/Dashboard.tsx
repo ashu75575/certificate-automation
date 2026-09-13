@@ -4,9 +4,30 @@ import React, { useState, useMemo, useRef, useCallback } from 'react';
 import ParticipantTable from './ParticipantTable';
 import {
   Search, Filter, Play, Pause, RotateCcw, Users, CheckCircle,
-  Clock, AlertTriangle, XCircle, X, Mail, Send, FileX, Zap
+  Clock, AlertTriangle, XCircle, Mail, Send, FileX, Zap
 } from 'lucide-react';
 import type { ParticipantStatus } from '@/lib/status';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// UI Components
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface Participant {
   teamName: string;
@@ -32,6 +53,22 @@ interface CurrentParticipant {
 
 const ITEMS_PER_PAGE = 50;
 
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } }
+};
+
 export default function Dashboard({ initialParticipants, initialDailyCount, dailyLimit }: DashboardProps) {
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,10 +81,10 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
   const [dailySent, setDailySent] = useState(initialDailyCount);
   const [systemError, setSystemError] = useState('');
 
-  // Pause flag — use ref so the running loop sees the latest value
+  // Pause flag
   const pauseRequestedRef = useRef(false);
 
-  // Test certificate modal state (kept from Phase 3)
+  // Test certificate modal state
   const [testingParticipant, setTestingParticipant] = useState<Participant | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; data?: { id: string; name: string; expectedFileName: string; mimeType: string; size: number }; error?: string; loading: boolean } | null>(null);
   const [testEmailAddress, setTestEmailAddress] = useState('');
@@ -58,8 +95,7 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [smtpError, setSmtpError] = useState('');
 
-  // --- Handlers from Phase 3 (test certificate + SMTP verify) ---
-
+  // --- Handlers ---
   const handleTestCertificate = async (participant: Participant) => {
     setTestingParticipant(participant);
     setTestResult({ success: false, loading: true });
@@ -133,15 +169,12 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
     }
   };
 
-  // --- Batch sending loop ---
-
   const sendLoop = useCallback(async () => {
     setSendingState('sending');
     setSystemError('');
     pauseRequestedRef.current = false;
 
     while (true) {
-      // Check if pause requested
       if (pauseRequestedRef.current) {
         setSendingState('paused');
         setCurrentParticipant(null);
@@ -165,7 +198,6 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
         const results: { email: string; name: string; team: string; status: ParticipantStatus; action: string }[] =
           Array.isArray(data.processed) ? data.processed : (data.processed ? [data.processed] : []);
 
-        // Update participant statuses from batch results
         if (data.stats && results.length > 0) {
           setParticipants(prev => {
             const updated = [...prev];
@@ -197,7 +229,6 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
           });
         }
 
-        // Check stop conditions
         if (data.stopped) {
           if (data.stopReason === 'DAILY_LIMIT_REACHED') {
             setSendingState('daily_limit_reached');
@@ -208,9 +239,7 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
           return;
         }
 
-        // Small delay between batches for UI readability
         await new Promise(r => setTimeout(r, 300));
-
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Network error';
         setSystemError(errorMessage);
@@ -235,11 +264,9 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
     sendLoop();
   };
 
-  // --- Statistics ---
-
+  // --- Statistics & Derived State ---
   const stats = useMemo(() => {
     let sent = 0, pending = 0, failed = 0, invalidEmail = 0, certificateNotFound = 0;
-
     participants.forEach(p => {
       switch (p.status) {
         case 'SENT': sent++; break;
@@ -249,11 +276,8 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
         default: pending++; break;
       }
     });
-
     return { total: participants.length, sent, pending, failed, invalidEmail, certificateNotFound };
   }, [participants]);
-
-  // --- Filtering + Pagination ---
 
   const filteredParticipants = useMemo(() => {
     return participants.filter(p => {
@@ -264,7 +288,6 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
         p.teamName.toLowerCase().includes(searchLower);
 
       const matchesStatus = statusFilter === 'ALL' || p.status === statusFilter;
-
       return matchesSearch && matchesStatus;
     });
   }, [participants, searchTerm, statusFilter]);
@@ -275,7 +298,6 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
     currentPage * ITEMS_PER_PAGE
   );
 
-  // --- Derived state ---
   const isSending = sendingState === 'sending';
   const isPaused = sendingState === 'paused';
   const isIdle = sendingState === 'idle';
@@ -284,67 +306,62 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
   const canResume = isPaused || sendingState === 'error';
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans pb-12">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+    <div className="min-h-screen bg-background text-foreground font-sans pb-12 selection:bg-primary/20">
+      {/* Premium Glassmorphic Header */}
+      <header className="sticky top-0 z-10 bg-background/70 backdrop-blur-md border-b border-border shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <span className="text-blue-600">NexHack</span> Certificate Sender
+            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 flex items-center gap-2">
+              NexHack Automation
             </h1>
-            <p className="text-sm text-gray-500 mt-1">Manage and send certificates to online round participants.</p>
+            <p className="text-sm text-muted-foreground mt-1 font-medium">Streamlined certificate delivery</p>
           </div>
-          <div className="flex gap-3 items-center">
-            {smtpStatus === 'success' && <span className="text-sm text-green-600 font-medium">SMTP Connected ✓</span>}
-            {smtpStatus === 'error' && <span className="text-sm text-red-600 font-medium" title={smtpError}>SMTP Error</span>}
-            <button
+
+          <div className="flex flex-wrap gap-3 items-center">
+            {smtpStatus === 'success' && <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/20">SMTP Connected ✓</span>}
+            {smtpStatus === 'error' && <span className="text-sm text-destructive font-medium bg-destructive/10 px-2 py-1 rounded-md border border-destructive/20" title={smtpError}>SMTP Error</span>}
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleVerifySMTP}
               disabled={isSending}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-transparent"
             >
               {smtpStatus === 'testing' ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-700"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
               ) : (
-                <Mail className="w-4 h-4" />
+                <Mail className="w-4 h-4 mr-2" />
               )}
               Test SMTP
-            </button>
+            </Button>
 
             {canPause && (
-              <button
-                onClick={handlePause}
-                className="flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 rounded-md font-medium transition-colors"
-              >
-                <Pause className="w-4 h-4" />
+              <Button onClick={handlePause} variant="outline" className="bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-100 hover:dark:bg-amber-500/20 hover:text-amber-800 dark:hover:text-amber-300 border-amber-200 dark:border-amber-500/20">
+                <Pause className="w-4 h-4 mr-2" />
                 Pause
-              </button>
+              </Button>
             )}
 
             {canResume && (
-              <button
-                onClick={handleResume}
-                className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 hover:bg-green-200 rounded-md font-medium transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
+              <Button onClick={handleResume} variant="outline" className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 hover:dark:bg-emerald-500/20 hover:text-emerald-800 dark:hover:text-emerald-300 border-emerald-200 dark:border-emerald-500/20">
+                <RotateCcw className="w-4 h-4 mr-2" />
                 Resume
-              </button>
+              </Button>
             )}
 
             {canStart && (
-              <button
-                onClick={handleStart}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors shadow-sm"
-              >
-                <Play className="w-4 h-4" />
+              <Button onClick={handleStart} className="bg-cyan-600 hover:bg-cyan-700 text-white shadow-md shadow-blue-500/20 transition-all hover:shadow-lg hover:shadow-blue-500/30">
+                <Play className="w-4 h-4 mr-2 fill-current" />
                 Start Sending
-              </button>
+              </Button>
             )}
 
             {isSending && (
-              <span className="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 bg-blue-50 rounded-md font-medium animate-pulse">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-cyan-700 dark:text-cyan-400 bg-cyan-50/80 dark:bg-cyan-500/10 rounded-md font-medium border border-cyan-200 dark:border-cyan-500/20 shadow-sm animate-pulse">
+                <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-cyan-600 dark:border-cyan-400"></div>
                 Sending...
-              </span>
+              </div>
             )}
           </div>
         </div>
@@ -352,117 +369,168 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        {/* Status Banner */}
-        {sendingState === 'completed' && (
-          <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
-            <CheckCircle className="w-5 h-5 shrink-0" />
-            <div>
-              <p className="font-semibold">All participants processed.</p>
-              <p className="text-sm mt-1">
-                Sent: {stats.sent} · Failed: {stats.failed} · Invalid Email: {stats.invalidEmail} · Cert Not Found: {stats.certificateNotFound}
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Animated Status Banners */}
+        <AnimatePresence mode="popLayout">
+          {sendingState === 'completed' && (
+            <motion.div
+              key="completed"
+              initial={{ opacity: 0, height: 0, y: -20 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -20 }}
+              transition={{ duration: 0.3, type: "spring", bounce: 0 }}
+            >
+              <Alert className="bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-800 dark:text-emerald-400">
+                <CheckCircle className="h-4 w-4 stroke-emerald-600 dark:stroke-emerald-400" />
+                <AlertTitle>All participants processed.</AlertTitle>
+                <AlertDescription>
+                  Sent: {stats.sent} &middot; Failed: {stats.failed} &middot; Invalid Email: {stats.invalidEmail} &middot; Cert Not Found: {stats.certificateNotFound}
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
 
-        {sendingState === 'daily_limit_reached' && (
-          <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-            <div>
-              <p className="font-semibold">Daily limit reached ({dailySent} / {dailyLimit})</p>
-              <p className="text-sm mt-1">Sending has stopped. Resume manually on the next day.</p>
-            </div>
-          </div>
-        )}
+          {sendingState === 'daily_limit_reached' && (
+            <motion.div
+              key="limit"
+              initial={{ opacity: 0, height: 0, y: -20 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Alert className="bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4 stroke-amber-600 dark:stroke-amber-400" />
+                <AlertTitle>Daily limit reached ({dailySent} / {dailyLimit})</AlertTitle>
+                <AlertDescription>Sending has stopped. Resume manually on the next day.</AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
 
-        {sendingState === 'paused' && (
-          <div className="flex items-center gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
-            <Pause className="w-5 h-5 shrink-0" />
-            <div>
-              <p className="font-semibold">Sending paused</p>
-              <p className="text-sm mt-1">Click Resume to continue from the next unsent participant.</p>
-            </div>
-          </div>
-        )}
+          {sendingState === 'paused' && (
+            <motion.div
+              key="paused"
+              initial={{ opacity: 0, height: 0, y: -20 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Alert className="bg-yellow-50 dark:bg-amber-500/10 border-yellow-200 dark:border-amber-500/20 text-yellow-800 dark:text-amber-400">
+                <Pause className="h-4 w-4 stroke-yellow-600 dark:stroke-amber-400" />
+                <AlertTitle>Sending paused</AlertTitle>
+                <AlertDescription>Click Resume to continue from the next unsent participant.</AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
 
-        {sendingState === 'error' && (
-          <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
-            <XCircle className="w-5 h-5 shrink-0" />
-            <div>
-              <p className="font-semibold">System error</p>
-              <p className="text-sm mt-1">{systemError}</p>
-              <p className="text-sm mt-1">Click Resume to retry.</p>
-            </div>
-          </div>
-        )}
+          {sendingState === 'error' && (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0, height: 0, y: -20 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                <XCircle className="h-4 w-4 stroke-destructive" />
+                <AlertTitle>System error</AlertTitle>
+                <AlertDescription>
+                  <p>{systemError}</p>
+                  <p className="mt-1 font-medium">Click Resume to retry.</p>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
 
-        {/* Current Participant */}
-        {currentParticipant && isSending && (
-          <div className="flex items-center gap-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <Zap className="w-5 h-5 text-blue-600 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold text-blue-900 truncate">
-                  {currentParticipant.name || 'Processing...'}
-                </p>
-                {currentParticipant.email && (
-                  <span className="text-sm text-blue-600">{currentParticipant.email}</span>
-                )}
-              </div>
-              <p className="text-sm text-blue-700 mt-0.5">{currentParticipant.action}</p>
-            </div>
-          </div>
-        )}
+          {/* Current Processing Indicator */}
+          {currentParticipant && isSending && (
+            <motion.div
+              key="current"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="border-primary/20 bg-primary/5 shadow-sm overflow-hidden relative">
+                {/* Subtle animated gradient background */}
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 animate-pulse"></div>
+                <CardContent className="p-4 flex items-center gap-4 relative z-10">
+                  <div className="bg-primary/20 p-2 rounded-full">
+                    <Zap className="w-5 h-5 text-primary shrink-0" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <p className="font-semibold text-foreground truncate">
+                        {currentParticipant.name || 'Processing...'}
+                      </p>
+                      {currentParticipant.email && (
+                        <span className="text-sm font-medium text-muted-foreground">{currentParticipant.email}</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-primary mt-0.5 font-medium">{currentParticipant.action}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-          <StatCard title="Total" value={stats.total} icon={<Users className="text-blue-500" />} />
-          <StatCard title="Sent" value={stats.sent} icon={<CheckCircle className="text-green-500" />} />
-          <StatCard title="Pending" value={stats.pending} icon={<Clock className="text-yellow-500" />} />
-          <StatCard title="Failed" value={stats.failed} icon={<XCircle className="text-red-500" />} />
-          <StatCard title="Invalid Email" value={stats.invalidEmail} icon={<AlertTriangle className="text-orange-500" />} />
-          <StatCard title="Cert Not Found" value={stats.certificateNotFound} icon={<FileX className="text-purple-500" />} />
+        {/* Staggered Statistics Cards */}
+        <motion.div
+          className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <StatCard variants={itemVariants} title="Total" value={stats.total} icon={<Users className="text-blue-500 w-5 h-5" />} />
+          <StatCard variants={itemVariants} title="Sent" value={stats.sent} icon={<CheckCircle className="text-emerald-500 w-5 h-5" />} />
+          <StatCard variants={itemVariants} title="Pending" value={stats.pending} icon={<Clock className="text-amber-500 w-5 h-5" />} />
+          <StatCard variants={itemVariants} title="Failed" value={stats.failed} icon={<XCircle className="text-red-500 w-5 h-5" />} />
+          <StatCard variants={itemVariants} title="Invalid Email" value={stats.invalidEmail} icon={<AlertTriangle className="text-orange-500 w-5 h-5" />} />
+          <StatCard variants={itemVariants} title="Cert Not Found" value={stats.certificateNotFound} icon={<FileX className="text-purple-500 w-5 h-5" />} />
           <StatCard
+            variants={itemVariants}
             title="Today's Emails"
             value={dailySent}
             subtitle={`/ ${dailyLimit}`}
-            icon={<Send className="text-indigo-500" />}
+            icon={<Send className="text-indigo-500 w-5 h-5" />}
           />
-        </div>
+        </motion.div>
 
-        {/* Filters and Table */}
+        {/* Controls and Table */}
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row justify-between gap-4">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search by name, email, or team..."
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Search participants, emails or teams..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                className="pl-9 bg-background shadow-sm border-border"
               />
             </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg bg-white appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer"
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="PENDING">Pending</option>
-                <option value="SENT">Sent</option>
-                <option value="FAILED">Failed</option>
-                <option value="INVALID_EMAIL">Invalid Email</option>
-                <option value="CERTIFICATE_NOT_FOUND">Cert Not Found</option>
-              </select>
+
+            <div className="w-full sm:w-48">
+              <Select value={statusFilter} onValueChange={(val) => {
+                setStatusFilter(val || 'ALL');
+                setCurrentPage(1);
+              }}>
+                <SelectTrigger className="bg-background shadow-sm border-border">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Filter className="w-4 h-4" />
+                    <SelectValue placeholder="Filter Status" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Statuses</SelectItem>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="SENT">Sent</SelectItem>
+                  <SelectItem value="FAILED">Failed</SelectItem>
+                  <SelectItem value="INVALID_EMAIL">Invalid Email</SelectItem>
+                  <SelectItem value="CERTIFICATE_NOT_FOUND">Cert Not Found</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -474,132 +542,141 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <p className="text-sm text-gray-600">
-                Showing <span className="font-medium">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="font-medium">{Math.min(currentPage * ITEMS_PER_PAGE, filteredParticipants.length)}</span> of <span className="font-medium">{filteredParticipants.length}</span> results
+            <div className="flex justify-between items-center bg-card/50 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-border">
+              <p className="text-sm text-muted-foreground font-medium">
+                Showing <span className="text-foreground">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="text-foreground">{Math.min(currentPage * ITEMS_PER_PAGE, filteredParticipants.length)}</span> of <span className="text-foreground">{filteredParticipants.length}</span> results
               </p>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="bg-transparent"
                 >
                   Previous
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="bg-transparent"
                 >
                   Next
-                </button>
+                </Button>
               </div>
             </div>
           )}
         </div>
-
       </main>
 
-      {/* Test Certificate Modal (from Phase 3) */}
-      {testingParticipant && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Test Certificate</h3>
-              <button onClick={() => setTestingParticipant(null)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6">
-              <div className="mb-4">
-                <p className="text-sm text-gray-500">Participant</p>
-                <p className="font-medium">{testingParticipant.memberName} ({testingParticipant.teamName})</p>
+      {/* Test Certificate Modal using Shadcn Dialog */}
+      <Dialog open={!!testingParticipant} onOpenChange={(open) => {
+        if (!open) setTestingParticipant(null);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Test Certificate</DialogTitle>
+            <DialogDescription>
+              Testing generation for <span className="font-medium text-foreground">{testingParticipant?.memberName}</span> from team <span className="font-medium text-foreground">{testingParticipant?.teamName}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            {testResult?.loading ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <p className="text-sm text-muted-foreground font-medium">Generating certificate preview...</p>
               </div>
+            ) : testResult?.success && testResult.data ? (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                <Alert className="bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20">
+                  <CheckCircle className="h-4 w-4 stroke-emerald-600 dark:stroke-emerald-400" />
+                  <AlertTitle className="text-emerald-800 dark:text-emerald-400">Certificate Found</AlertTitle>
+                </Alert>
 
-              {testResult?.loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <div className="bg-muted border border-border p-4 rounded-lg space-y-2 text-sm">
+                  <p><span className="text-muted-foreground font-medium">File Name:</span> {testResult.data.name}</p>
+                  <p><span className="text-muted-foreground font-medium">Expected Name:</span> {testResult.data.expectedFileName}</p>
+                  <p><span className="text-muted-foreground font-medium">File Type:</span> {testResult.data.mimeType}</p>
+                  <p><span className="text-muted-foreground font-medium">File Size:</span> {(testResult.data.size / 1024).toFixed(2)} KB</p>
                 </div>
-              ) : testResult?.success && testResult.data ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-green-600 font-medium bg-green-50 p-3 rounded-lg">
-                    <CheckCircle className="w-5 h-5" />
-                    Certificate Found
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2 text-sm">
-                    <p><span className="text-gray-500">File Name:</span> {testResult.data.name}</p>
-                    <p><span className="text-gray-500">Expected Name:</span> {testResult.data.expectedFileName}</p>
-                    <p><span className="text-gray-500">File Type:</span> {testResult.data.mimeType}</p>
-                    <p><span className="text-gray-500">File Size:</span> {(testResult.data.size / 1024).toFixed(2)} KB</p>
+
+                <div className="pt-2">
+                  <h4 className="text-sm font-semibold text-foreground mb-3">Send Test Email</h4>
+                  <div className="flex gap-2">
+                    <Input
+                      type="email"
+                      placeholder="recipient@example.com"
+                      value={testEmailAddress}
+                      onChange={(e) => setTestEmailAddress(e.target.value)}
+                    />
+                    <Button
+                      onClick={handleSendTestEmail}
+                      disabled={emailSending || !testEmailAddress || !/^\S+@\S+\.\S+$/.test(testEmailAddress)}
+                    >
+                      {emailSending ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      ) : (
+                        <Send className="w-4 h-4 mr-2" />
+                      )}
+                      Send
+                    </Button>
                   </div>
 
-                  <div className="border-t border-gray-200 pt-4 mt-4">
-                    <h4 className="text-sm font-medium text-gray-900 mb-2">Send Test Email</h4>
-                    <div className="flex gap-2">
-                      <input
-                        type="email"
-                        placeholder="recipient@example.com"
-                        value={testEmailAddress}
-                        onChange={(e) => setTestEmailAddress(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-                      />
-                      <button
-                        onClick={handleSendTestEmail}
-                        disabled={emailSending || !testEmailAddress || !/^\S+@\S+\.\S+$/.test(testEmailAddress)}
-                        className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                      >
-                        {emailSending ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        ) : (
-                          <Send className="w-4 h-4" />
-                        )}
-                        Send
-                      </button>
-                    </div>
-
-                    {emailResult && (
-                      <div className={`mt-3 p-3 rounded-md text-sm ${emailResult.success ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                        {emailResult.success ? (
-                          <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Test email sent successfully!</div>
-                        ) : (
-                          <div className="flex items-start gap-2"><XCircle className="w-4 h-4 mt-0.5 shrink-0" /> <div>Failed to send test email: {emailResult.error}</div></div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  {emailResult && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4">
+                      {emailResult.success ? (
+                        <Alert className="bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 py-2">
+                          <CheckCircle className="h-4 w-4 stroke-emerald-600 dark:stroke-emerald-400" />
+                          <AlertTitle className="text-emerald-800 dark:text-emerald-400 text-sm m-0">Test email sent successfully!</AlertTitle>
+                        </Alert>
+                      ) : (
+                        <Alert variant="destructive" className="py-2 bg-destructive/10 border-destructive/20 text-destructive">
+                          <XCircle className="h-4 w-4" />
+                          <AlertTitle className="text-sm m-0">Failed to send: {emailResult.error}</AlertTitle>
+                        </Alert>
+                      )}
+                    </motion.div>
+                  )}
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-start gap-2 text-red-600 font-medium bg-red-50 p-3 rounded-lg">
-                    <XCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                    <div>
-                      <p>Certificate Not Found or Error</p>
-                      <p className="text-sm font-normal mt-1">{testResult?.error}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+              </motion.div>
+            ) : testResult ? (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                  <XCircle className="h-4 w-4" />
+                  <AlertTitle>Certificate Not Found or Error</AlertTitle>
+                  <AlertDescription>{testResult.error}</AlertDescription>
+                </Alert>
+              </motion.div>
+            ) : null}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function StatCard({ title, value, subtitle, icon }: { title: string; value: number; subtitle?: string; icon: React.ReactNode }) {
+// Subcomponents
+
+function StatCard({ title, value, subtitle, icon, variants }: { title: string; value: number; subtitle?: string; icon: React.ReactNode, variants?: any }) {
   return (
-    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition-shadow cursor-default">
-      <div>
-        <p className="text-xs font-medium text-gray-500 mb-1">{title}</p>
-        <p className="text-2xl font-bold text-gray-900">
-          {value}
-          {subtitle && <span className="text-sm font-medium text-gray-400 ml-0.5">{subtitle}</span>}
-        </p>
-      </div>
-      <div className="p-2.5 bg-gray-50 rounded-full">
-        {icon}
-      </div>
-    </div>
+    <motion.div variants={variants} whileHover={{ y: -4, transition: { duration: 0.2 } }}>
+      <Card className="overflow-hidden border-border/60 shadow-sm hover:shadow-md transition-shadow h-full bg-card/70 backdrop-blur-sm">
+        <CardContent className="p-4 sm:p-5 flex items-start justify-between gap-2 h-full">
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{title}</p>
+            <p className="text-2xl font-bold text-foreground tracking-tight flex items-baseline gap-1">
+              {value}
+              {subtitle && <span className="text-sm font-medium text-muted-foreground">{subtitle}</span>}
+            </p>
+          </div>
+          <div className="p-2.5 bg-muted rounded-xl shrink-0 border border-border">
+            {icon}
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }

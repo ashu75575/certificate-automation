@@ -1,6 +1,10 @@
 import React from 'react';
 import { CheckCircle2, Clock, AlertCircle, AlertTriangle, FileX, Search } from 'lucide-react';
 import type { ParticipantStatus } from '@/lib/status';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Participant {
   teamName: string;
@@ -20,38 +24,38 @@ function StatusBadge({ status }: { status: ParticipantStatus }) {
   switch (status) {
     case 'SENT':
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+        <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20">
+          <CheckCircle2 className="w-3 h-3 mr-1" />
           SENT
-        </span>
+        </Badge>
       );
     case 'PENDING':
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-          <Clock className="w-3.5 h-3.5 mr-1" />
+        <Badge variant="outline" className="bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20">
+          <Clock className="w-3 h-3 mr-1" />
           PENDING
-        </span>
+        </Badge>
       );
     case 'FAILED':
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-          <AlertCircle className="w-3.5 h-3.5 mr-1" />
+        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+          <AlertCircle className="w-3 h-3 mr-1" />
           FAILED
-        </span>
+        </Badge>
       );
     case 'INVALID_EMAIL':
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-          <AlertTriangle className="w-3.5 h-3.5 mr-1" />
+        <Badge variant="outline" className="bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-500/20">
+          <AlertTriangle className="w-3 h-3 mr-1" />
           INVALID EMAIL
-        </span>
+        </Badge>
       );
     case 'CERTIFICATE_NOT_FOUND':
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-          <FileX className="w-3.5 h-3.5 mr-1" />
+        <Badge variant="outline" className="bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/20">
+          <FileX className="w-3 h-3 mr-1" />
           CERT NOT FOUND
-        </span>
+        </Badge>
       );
     default:
       return null;
@@ -60,77 +64,65 @@ function StatusBadge({ status }: { status: ParticipantStatus }) {
 
 export default function ParticipantTable({ participants, currentEmail, onTestCertificate }: ParticipantTableProps) {
   return (
-    <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Team Name
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Member Name
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Member Email
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Phone Number
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Status
-            </th>
-            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {participants.length === 0 ? (
-            <tr>
-              <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
-                No participants found.
-              </td>
-            </tr>
-          ) : (
-            participants.map((p, idx) => {
-              const isActive = currentEmail === p.memberEmail;
-              return (
-                <tr
-                  key={idx}
-                  className={`transition-colors ${isActive ? 'bg-blue-50 ring-2 ring-inset ring-blue-400' : 'hover:bg-gray-50'}`}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {p.teamName || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {p.memberName || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {p.memberEmail || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {p.memberPhone || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <StatusBadge status={p.status} />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {onTestCertificate && (
-                      <button
-                        onClick={() => onTestCertificate(p)}
-                        className="text-indigo-600 hover:text-indigo-900 flex items-center justify-end gap-1 w-full"
-                      >
-                        <Search className="w-4 h-4" />
-                        Test Cert
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+    <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+      <Table>
+        <TableHeader className="bg-muted/80">
+          <TableRow>
+            <TableHead className="font-semibold text-muted-foreground">Team Name</TableHead>
+            <TableHead className="font-semibold text-muted-foreground">Member Name</TableHead>
+            <TableHead className="font-semibold text-muted-foreground">Member Email</TableHead>
+            <TableHead className="font-semibold text-muted-foreground">Phone Number</TableHead>
+            <TableHead className="font-semibold text-muted-foreground">Status</TableHead>
+            <TableHead className="text-right font-semibold text-muted-foreground">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <AnimatePresence initial={false}>
+            {participants.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                  No participants found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              participants.map((p) => {
+                const isActive = currentEmail === p.memberEmail;
+                return (
+                  <motion.tr
+                    key={p.memberEmail + p.teamName + p.memberName}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0, backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255, 255, 255, 0)' }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className={`border-b border-border transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted ${isActive ? 'ring-1 ring-inset ring-primary/20' : ''}`}
+                  >
+                    <TableCell className="font-medium text-foreground">{p.teamName || '-'}</TableCell>
+                    <TableCell className="text-foreground">{p.memberName || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.memberEmail || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.memberPhone || '-'}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={p.status} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {onTestCertificate && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onTestCertificate(p)}
+                          className="text-muted-foreground hover:text-primary h-8"
+                        >
+                          <Search className="w-4 h-4 mr-2" />
+                          Test Cert
+                        </Button>
+                      )}
+                    </TableCell>
+                  </motion.tr>
+                );
+              })
+            )}
+          </AnimatePresence>
+        </TableBody>
+      </Table>
     </div>
   );
 }
