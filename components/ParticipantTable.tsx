@@ -64,7 +64,7 @@ function StatusBadge({ status }: { status: ParticipantStatus }) {
 
 export default function ParticipantTable({ participants, currentEmail, onTestCertificate }: ParticipantTableProps) {
   return (
-    <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+    <div className="rounded-xl border border-border backdrop-blur-sm shadow-sm bg-zinc-900/80 overflow-hidden">
       <Table>
         <TableHeader className="bg-muted/80">
           <TableRow>

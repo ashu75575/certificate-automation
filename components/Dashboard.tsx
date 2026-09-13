@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { ParticipantStatus } from '@/lib/status';
 import { motion, AnimatePresence } from 'framer-motion';
+import GradientWaves from './GradientWaves';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -306,9 +307,36 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
   const canResume = isPaused || sendingState === 'error';
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans pb-12 selection:bg-primary/20">
-      {/* Premium Glassmorphic Header */}
-      <header className="sticky top-0 z-10 bg-background/70 backdrop-blur-md border-b border-border shadow-sm">
+    <div className="relative min-h-screen bg-background text-foreground font-sans pb-12 selection:bg-primary/20 overflow-hidden">
+      {/* Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <GradientWaves
+          horizonColor="#0c99c0"
+          waveColor="#0ad2f1"
+          crestColor="#FFFFFF"
+          speed={0.65}
+          amplitude={1.3}
+          waveScale={1.45}
+          waveRatio={0.3}
+          swell={21.5}
+          turbulence={28.5}
+          tilt={1.1}
+          zoom={0.7}
+          height={5.5}
+          fogDepth={15}
+          detail="medium"
+          brightness={1.0}
+          opacity={1.0}
+          mouseInteraction={false}
+          parallaxStrength={0.53}
+          grain={true}
+          grainIntensity={0.12}
+        />
+      </div>
+
+      <div className="relative z-10">
+        {/* Premium Glassmorphic Header */}
+        <header className="sticky top-0 z-10 bg-background/70 backdrop-blur-md border-b border-border shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 flex items-center gap-2">
@@ -654,6 +682,7 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
