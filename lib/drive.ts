@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { google, drive_v3 } from 'googleapis';
 import { Participant } from './excel';
 
 export function normalizeName(name: string, team: string): string {
@@ -7,12 +7,16 @@ export function normalizeName(name: string, team: string): string {
   return `${cleanName}${cleanTeam}.pdf`;
 }
 
-export async function getParticipantCertificate(participant: Participant) {
-  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+// Lazily-initialized singleton Drive client — avoids re-creating auth + client per call
+let _driveClient: drive_v3.Drive | null = null;
+
+function getDriveClient(): drive_v3.Drive {
+  if (_driveClient) return _driveClient;
+
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 
-  if (!folderId || !privateKey || !clientEmail) {
+  if (!privateKey || !clientEmail) {
     throw new Error("Google Drive credentials are not fully configured.");
   }
 
@@ -24,8 +28,18 @@ export async function getParticipantCertificate(participant: Participant) {
     scopes: ['https://www.googleapis.com/auth/drive.readonly'],
   });
 
-  const drive = google.drive({ version: 'v3', auth });
-  
+  _driveClient = google.drive({ version: 'v3', auth });
+  return _driveClient;
+}
+
+export async function getParticipantCertificate(participant: Participant) {
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+  if (!folderId) {
+    throw new Error("GOOGLE_DRIVE_FOLDER_ID is not configured.");
+  }
+
+  const drive = getDriveClient();
   const expectedFileName = normalizeName(participant.memberName, participant.teamName);
 
   const response = await drive.files.list({
@@ -60,18 +74,7 @@ export async function getParticipantCertificate(participant: Participant) {
 }
 
 export async function getCertificateContent(fileId: string) {
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: clientEmail,
-      private_key: privateKey,
-    },
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
-
-  const drive = google.drive({ version: 'v3', auth });
+  const drive = getDriveClient();
 
   const response = await drive.files.get(
     { fileId, alt: 'media' },
@@ -80,3 +83,4 @@ export async function getCertificateContent(fileId: string) {
 
   return response.data;
 }
+

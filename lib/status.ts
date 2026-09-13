@@ -3,6 +3,15 @@ import path from 'path';
 
 export type ParticipantStatus = 'PENDING' | 'SENT' | 'FAILED' | 'INVALID_EMAIL' | 'CERTIFICATE_NOT_FOUND';
 
+/**
+ * Composite key for status.json so that duplicate emails (common in test data)
+ * don't cause one participant's status to overwrite another's.
+ * In production every email is unique, but the key stays stable either way.
+ */
+export function getParticipantKey(name: string, team: string, email: string): string {
+  return `${name.toLowerCase()}|${team.toLowerCase()}|${email.toLowerCase()}`;
+}
+
 interface StatusData {
   participants: Record<string, ParticipantStatus>;
   dailyCounts: Record<string, number>;
@@ -35,14 +44,14 @@ function saveStatus(data: StatusData): void {
   fs.writeFileSync(STATUS_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
-export function getParticipantStatus(email: string): ParticipantStatus | undefined {
+export function getParticipantStatus(key: string): ParticipantStatus | undefined {
   const data = loadStatus();
-  return data.participants[email];
+  return data.participants[key];
 }
 
-export function setParticipantStatus(email: string, status: ParticipantStatus): void {
+export function setParticipantStatus(key: string, status: ParticipantStatus): void {
   const data = loadStatus();
-  data.participants[email] = status;
+  data.participants[key] = status;
   saveStatus(data);
 }
 

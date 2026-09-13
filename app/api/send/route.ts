@@ -22,6 +22,8 @@ function computeStats(participants: { status: ParticipantStatus }[]) {
 
 export async function POST() {
   try {
+    const batchStart = performance.now();
+
     // 1. Load participants with saved status
     const raw = getParticipants();
     const participants = mergeWithSavedStatus(raw);
@@ -33,7 +35,7 @@ export async function POST() {
     if (todaySent >= dailyLimit) {
       const stats = computeStats(participants);
       return NextResponse.json({
-        processed: null,
+        processed: [],
         stats,
         dailyCount: { sent: todaySent, limit: dailyLimit },
         hasMore: false,
@@ -42,15 +44,19 @@ export async function POST() {
       });
     }
 
-    // 3. Find next eligible participant (not SENT, INVALID_EMAIL, or CERTIFICATE_NOT_FOUND)
-    const next = participants.find(p =>
-      p.status !== 'SENT' && p.status !== 'INVALID_EMAIL' && p.status !== 'CERTIFICATE_NOT_FOUND'
-    );
+    // 3. Find next batch of eligible participants
+    const BATCH_SIZE = 5;
+    const remaining = dailyLimit - todaySent;
+    const batchLimit = Math.min(BATCH_SIZE, remaining);
 
-    if (!next) {
+    const eligible = participants.filter(p =>
+      p.status !== 'SENT' && p.status !== 'INVALID_EMAIL' && p.status !== 'CERTIFICATE_NOT_FOUND'
+    ).slice(0, batchLimit);
+
+    if (eligible.length === 0) {
       const stats = computeStats(participants);
       return NextResponse.json({
-        processed: null,
+        processed: [],
         stats,
         dailyCount: { sent: todaySent, limit: dailyLimit },
         hasMore: false,
@@ -59,8 +65,19 @@ export async function POST() {
       });
     }
 
-    // 4. Process this single participant
-    const result = await processParticipant(next);
+    // 4. Process batch concurrently
+    const settledResults = await Promise.allSettled(eligible.map(p => processParticipant(p)));
+    const processed = settledResults.map((r, i) => {
+      if (r.status === 'fulfilled') return r.value;
+      // processParticipant never throws, but just in case:
+      return {
+        email: eligible[i].memberEmail,
+        name: eligible[i].memberName,
+        team: eligible[i].teamName,
+        status: 'FAILED' as const,
+        action: 'Unexpected processing error',
+      };
+    });
 
     // 5. Re-read to get updated stats
     const updatedParticipants = mergeWithSavedStatus(getParticipants());
@@ -72,8 +89,10 @@ export async function POST() {
       p.status !== 'SENT' && p.status !== 'INVALID_EMAIL' && p.status !== 'CERTIFICATE_NOT_FOUND'
     ) && updatedTodaySent < dailyLimit;
 
+    console.log(`[PERF] Batch of ${processed.length}: ${(performance.now() - batchStart).toFixed(0)}ms (${((performance.now() - batchStart) / processed.length).toFixed(0)}ms/participant)`);
+
     return NextResponse.json({
-      processed: result,
+      processed,
       stats,
       dailyCount: { sent: updatedTodaySent, limit: dailyLimit },
       hasMore,

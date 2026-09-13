@@ -1,8 +1,14 @@
 import nodemailer from 'nodemailer';
+import type Transporter from 'nodemailer/lib/mailer';
 import { Participant } from './excel';
 import { Readable } from 'stream';
 
-export function getTransporter() {
+// Lazily-initialized singleton — avoids re-creating TCP+TLS connection per email
+let _transporter: Transporter | null = null;
+
+export function getTransporter(): Transporter {
+  if (_transporter) return _transporter;
+
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
   const secure = process.env.SMTP_SECURE === 'true';
@@ -13,7 +19,10 @@ export function getTransporter() {
     throw new Error('SMTP credentials are not fully configured in environment variables.');
   }
 
-  return nodemailer.createTransport({
+  _transporter = nodemailer.createTransport({
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
     host,
     port,
     secure,
@@ -22,7 +31,10 @@ export function getTransporter() {
       pass,
     },
   });
+
+  return _transporter;
 }
+
 
 export async function verifySMTPConnection(): Promise<boolean> {
   const transporter = getTransporter();

@@ -133,7 +133,7 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
     }
   };
 
-  // --- Sequential sending loop ---
+  // --- Batch sending loop ---
 
   const sendLoop = useCallback(async () => {
     setSendingState('sending');
@@ -148,7 +148,7 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
         return;
       }
 
-      setCurrentParticipant({ name: '', email: '', action: 'Finding next participant...' });
+      setCurrentParticipant({ name: '', email: '', action: 'Processing next batch...' });
 
       try {
         const res = await fetch('/api/send', { method: 'POST' });
@@ -162,16 +162,21 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
         }
 
         const data = await res.json();
+        const results: { email: string; name: string; team: string; status: ParticipantStatus; action: string }[] =
+          Array.isArray(data.processed) ? data.processed : (data.processed ? [data.processed] : []);
 
-        // Update stats
-        if (data.stats) {
+        // Update participant statuses from batch results
+        if (data.stats && results.length > 0) {
           setParticipants(prev => {
             const updated = [...prev];
-            // If a participant was processed, update their status
-            if (data.processed) {
-              const idx = updated.findIndex(p => p.memberEmail === data.processed.email);
+            for (const result of results) {
+              const idx = updated.findIndex(p =>
+                p.memberEmail === result.email &&
+                p.memberName === result.name &&
+                p.teamName === result.team
+              );
               if (idx !== -1) {
-                updated[idx] = { ...updated[idx], status: data.processed.status };
+                updated[idx] = { ...updated[idx], status: result.status };
               }
             }
             return updated;
@@ -182,11 +187,13 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
           setDailySent(data.dailyCount.sent);
         }
 
-        if (data.processed) {
+        if (results.length > 0) {
+          const last = results[results.length - 1];
+          const sentCount = results.filter(r => r.status === 'SENT').length;
           setCurrentParticipant({
-            name: data.processed.name,
-            email: data.processed.email,
-            action: data.processed.action,
+            name: results.length > 1 ? `Batch: ${results.length} processed (${sentCount} sent)` : last.name,
+            email: results.length > 1 ? '' : last.email,
+            action: last.action,
           });
         }
 
@@ -201,7 +208,7 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
           return;
         }
 
-        // Small delay between participants for UI readability
+        // Small delay between batches for UI readability
         await new Promise(r => setTimeout(r, 300));
 
       } catch (err: unknown) {

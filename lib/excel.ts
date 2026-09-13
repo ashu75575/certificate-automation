@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import path from 'path';
 import fs from 'fs';
-import { loadStatus, type ParticipantStatus } from './status';
+import { loadStatus, getParticipantKey, type ParticipantStatus } from './status';
 
 export interface Participant {
   teamName: string;
@@ -49,13 +49,15 @@ export function getParticipants(): Participant[] {
 
 /**
  * Merge Excel participants with saved status from data/status.json.
- * This ensures restarts never lose status — SENT participants stay SENT.
+ * Uses a composite key (name|team|email) so duplicate emails in test
+ * data are tracked independently per participant.
  */
 export function mergeWithSavedStatus(participants: Participant[]): Participant[] {
   const savedStatus = loadStatus();
 
   return participants.map(p => {
-    const saved = savedStatus.participants[p.memberEmail];
+    const key = getParticipantKey(p.memberName, p.teamName, p.memberEmail);
+    const saved = savedStatus.participants[key];
     if (saved) {
       return { ...p, status: saved };
     }
