@@ -1,12 +1,13 @@
 import React from 'react';
 import { Participant } from '@/lib/excel';
-import { CheckCircle2, Clock, AlertCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, AlertTriangle, Search } from 'lucide-react';
 
 interface ParticipantTableProps {
   participants: Participant[];
+  onTestCertificate?: (participant: Participant) => void;
 }
 
-export default function ParticipantTable({ participants }: ParticipantTableProps) {
+export default function ParticipantTable({ participants, onTestCertificate }: ParticipantTableProps) {
   return (
     <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
       <table className="min-w-full divide-y divide-gray-200">
@@ -27,12 +28,15 @@ export default function ParticipantTable({ participants }: ParticipantTableProps
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Status
             </th>
+            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {participants.length === 0 ? (
             <tr>
-              <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+              <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
                 No participants found.
               </td>
             </tr>
@@ -78,6 +82,17 @@ export default function ParticipantTable({ participants }: ParticipantTableProps
                       <AlertCircle className="w-3.5 h-3.5 mr-1" />
                       FAILED
                     </span>
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  {onTestCertificate && (
+                    <button
+                      onClick={() => onTestCertificate(p)}
+                      className="text-indigo-600 hover:text-indigo-900 flex items-center justify-end gap-1 w-full"
+                    >
+                      <Search className="w-4 h-4" />
+                      Test Cert
+                    </button>
                   )}
                 </td>
               </tr>
