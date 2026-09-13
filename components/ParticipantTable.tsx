@@ -1,13 +1,64 @@
 import React from 'react';
-import { Participant } from '@/lib/excel';
-import { CheckCircle2, Clock, AlertCircle, AlertTriangle, Search } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, AlertTriangle, FileX, Search } from 'lucide-react';
+import type { ParticipantStatus } from '@/lib/status';
+
+interface Participant {
+  teamName: string;
+  memberName: string;
+  memberEmail: string;
+  memberPhone: string;
+  status: ParticipantStatus;
+}
 
 interface ParticipantTableProps {
   participants: Participant[];
+  currentEmail?: string;
   onTestCertificate?: (participant: Participant) => void;
 }
 
-export default function ParticipantTable({ participants, onTestCertificate }: ParticipantTableProps) {
+function StatusBadge({ status }: { status: ParticipantStatus }) {
+  switch (status) {
+    case 'SENT':
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+          SENT
+        </span>
+      );
+    case 'PENDING':
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+          <Clock className="w-3.5 h-3.5 mr-1" />
+          PENDING
+        </span>
+      );
+    case 'FAILED':
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+          <AlertCircle className="w-3.5 h-3.5 mr-1" />
+          FAILED
+        </span>
+      );
+    case 'INVALID_EMAIL':
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+          <AlertTriangle className="w-3.5 h-3.5 mr-1" />
+          INVALID EMAIL
+        </span>
+      );
+    case 'CERTIFICATE_NOT_FOUND':
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+          <FileX className="w-3.5 h-3.5 mr-1" />
+          CERT NOT FOUND
+        </span>
+      );
+    default:
+      return null;
+  }
+}
+
+export default function ParticipantTable({ participants, currentEmail, onTestCertificate }: ParticipantTableProps) {
   return (
     <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
       <table className="min-w-full divide-y divide-gray-200">
@@ -41,62 +92,42 @@ export default function ParticipantTable({ participants, onTestCertificate }: Pa
               </td>
             </tr>
           ) : (
-            participants.map((p, idx) => (
-              <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {p.teamName || '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {p.memberName || '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <div className="flex items-center space-x-2">
-                    <span className={!p.isValidEmail && p.memberEmail ? 'text-red-600 font-medium' : 'text-gray-700'}>
-                      {p.memberEmail || '-'}
-                    </span>
-                    {!p.isValidEmail && p.memberEmail && (
-                      <span title="Invalid Email Format">
-                        <AlertTriangle className="w-4 h-4 text-red-500" />
-                      </span>
+            participants.map((p, idx) => {
+              const isActive = currentEmail === p.memberEmail;
+              return (
+                <tr
+                  key={idx}
+                  className={`transition-colors ${isActive ? 'bg-blue-50 ring-2 ring-inset ring-blue-400' : 'hover:bg-gray-50'}`}
+                >
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {p.teamName || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {p.memberName || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {p.memberEmail || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {p.memberPhone || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <StatusBadge status={p.status} />
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    {onTestCertificate && (
+                      <button
+                        onClick={() => onTestCertificate(p)}
+                        className="text-indigo-600 hover:text-indigo-900 flex items-center justify-end gap-1 w-full"
+                      >
+                        <Search className="w-4 h-4" />
+                        Test Cert
+                      </button>
                     )}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {p.memberPhone || '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {p.status === 'SENT' && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                      SENT
-                    </span>
-                  )}
-                  {p.status === 'PENDING' && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      <Clock className="w-3.5 h-3.5 mr-1" />
-                      PENDING
-                    </span>
-                  )}
-                  {p.status === 'FAILED' && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      <AlertCircle className="w-3.5 h-3.5 mr-1" />
-                      FAILED
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  {onTestCertificate && (
-                    <button
-                      onClick={() => onTestCertificate(p)}
-                      className="text-indigo-600 hover:text-indigo-900 flex items-center justify-end gap-1 w-full"
-                    >
-                      <Search className="w-4 h-4" />
-                      Test Cert
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>
