@@ -64,7 +64,17 @@ export async function sendCertificateEmail(
     from: `NexHack Team <${from}>`,
     to: recipientEmail,
     subject: 'NexHack — Online Round Participation Certificate',
-    text: `Dear ${participant.memberName},\n\nThank you for participating in the NexHack Online Round.\n\nPlease find your participation certificate attached to this email.\n\nRegards,\nNexHack Team`,
+    text: `Dear ${participant.memberName},\n\nGreetings from NexVerse IITM!\n\nThank you for being a part of NexHack 2.0 and for participating in the Online Evaluation Round. We sincerely appreciate the time, effort, and enthusiasm you put into the evaluation process.\n\nAs a token of appreciation for your participation, we are pleased to share your E-Certificate of Participation with this email.\n\nPlease find your certificate attached.\n\nWe hope you had a meaningful and enriching experience participating in NexHack 2.0.\n\nThank you once again for being a part of NexHack 2.0.\n\nWarm regards,\nTeam NexVerse IITM\nNexHack 2.0`,
+    html: `<p>Dear ${participant.memberName},</p>
+<p>Greetings from <strong>NexVerse IITM</strong>!</p>
+<p>Thank you for being a part of <strong>NexHack 2.0</strong> and for participating in the <strong>Online Evaluation Round</strong>. We sincerely appreciate the time, effort, and enthusiasm you put into the evaluation process.</p>
+<p>As a token of appreciation for your participation, we are pleased to share your <strong>E-Certificate of Participation</strong> with this email.</p>
+<p>Please find your certificate attached.</p>
+<p>We hope you had a meaningful and enriching experience participating in NexHack 2.0.</p>
+<p>Thank you once again for being a part of <strong>NexHack 2.0</strong>.</p>
+<p>Warm regards,<br>
+<strong>Team NexVerse IITM</strong><br>
+<em>NexHack 2.0</em></p>`,
     attachments: [
       {
         filename: filename,

@@ -2,9 +2,13 @@ import { google, drive_v3 } from 'googleapis';
 import { Participant } from './excel';
 
 export function normalizeName(name: string, team: string): string {
-  const cleanName = name.replace(/\s+/g, '').toLowerCase();
-  const cleanTeam = team.replace(/\s+/g, '').toLowerCase();
-  return `${cleanName}${cleanTeam}.pdf`;
+  const cleanName = name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9]/g, '');
+  // const cleanTeam = team.replace(/\s+/g, '').toLowerCase();
+  return `${cleanName}.pdf`;
 }
 
 // Lazily-initialized singleton Drive client — avoids re-creating auth + client per call

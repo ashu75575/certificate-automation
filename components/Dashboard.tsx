@@ -4,11 +4,12 @@ import React, { useState, useMemo, useRef, useCallback } from 'react';
 import ParticipantTable from './ParticipantTable';
 import {
   Search, Filter, Play, Pause, RotateCcw, Users, CheckCircle,
-  Clock, AlertTriangle, XCircle, Mail, Send, FileX, Zap
+  Clock, AlertTriangle, XCircle, Mail, Send, FileX, Zap, Download
 } from 'lucide-react';
 import type { ParticipantStatus } from '@/lib/status';
 import { motion, AnimatePresence } from 'framer-motion';
 import GradientWaves from './GradientWaves';
+import * as XLSX from 'xlsx';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -52,7 +53,7 @@ interface CurrentParticipant {
   action: string;
 }
 
-const ITEMS_PER_PAGE = 50;
+const ITEMS_PER_PAGE = 500;
 
 // Animation variants
 const containerVariants = {
@@ -168,6 +169,20 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
     } finally {
       setEmailSending(false);
     }
+  };
+
+  const handleExportExcel = () => {
+    const data = participants.map(p => ({
+      'Team Name': p.teamName,
+      'Member Name': p.memberName,
+      'Email': p.memberEmail,
+      'Phone': p.memberPhone,
+      'Status': p.status
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Participants');
+    XLSX.writeFile(workbook, 'nexhack_participants_status.xlsx');
   };
 
   const sendLoop = useCallback(async () => {
@@ -348,6 +363,16 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
           <div className="flex flex-wrap gap-3 items-center">
             {smtpStatus === 'success' && <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/20">SMTP Connected ✓</span>}
             {smtpStatus === 'error' && <span className="text-sm text-destructive font-medium bg-destructive/10 px-2 py-1 rounded-md border border-destructive/20" title={smtpError}>SMTP Error</span>}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
+              className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 hover:dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/20"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export XLSX
+            </Button>
 
             <Button
               variant="outline"
@@ -562,11 +587,7 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
             </div>
           </div>
 
-          <ParticipantTable
-            participants={paginatedParticipants}
-            currentEmail={currentParticipant?.email}
-            onTestCertificate={handleTestCertificate}
-          />
+
 
           {/* Pagination */}
           {totalPages > 1 && (
@@ -596,6 +617,12 @@ export default function Dashboard({ initialParticipants, initialDailyCount, dail
               </div>
             </div>
           )}
+
+          <ParticipantTable
+            participants={paginatedParticipants}
+            currentEmail={currentParticipant?.email}
+            onTestCertificate={handleTestCertificate}
+          />
         </div>
       </main>
 

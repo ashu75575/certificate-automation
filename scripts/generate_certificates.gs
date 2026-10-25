@@ -31,7 +31,7 @@
  *
  *
  * OUTPUT FILENAME:
- *   {memberName}{teamName}.pdf
+ *   {memberName}.pdf
  *
  * Example:
  *
@@ -39,7 +39,7 @@
  *   Team Name:   PIXEL THINGS
  *
  *   Output:
- *   danvirjspixelthings.pdf
+ *   danvirjs.pdf
  * ============================================================
  */
 
@@ -232,7 +232,7 @@ function generateAllCertificates() {
     //
     // Example:
     //
-    // danvirjspixelthings.pdf already exists
+    // danvirjs.pdf already exists
     //
     // → Do NOT generate another one.
     //
@@ -600,7 +600,7 @@ function exportSlidesAsPdf(
  *
  * Into:
  *
- *   danvirjspixelthings.pdf
+ *   danvirjs.pdf
  */
 
 function normalizeCertificateFilename(
@@ -614,14 +614,14 @@ function normalizeCertificateFilename(
     );
 
 
-  const cleanTeam =
-    normalizeTextForFilename(
-      teamName
-    );
+  // const cleanTeam =
+  //   normalizeTextForFilename(
+  //     teamName
+  //   );
 
 
   return (
-    `${cleanName}${cleanTeam}.pdf`
+    `${cleanName}.pdf`
   );
 }
 

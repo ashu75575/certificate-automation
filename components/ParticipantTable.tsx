@@ -85,11 +85,11 @@ export default function ParticipantTable({ participants, currentEmail, onTestCer
                 </TableCell>
               </TableRow>
             ) : (
-              participants.map((p) => {
+              participants.map((p,id) => {
                 const isActive = currentEmail === p.memberEmail;
                 return (
                   <motion.tr
-                    key={p.memberEmail + p.teamName + p.memberName}
+                    key={p.memberEmail + p.teamName + p.memberName + id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0, backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255, 255, 255, 0)' }}
                     exit={{ opacity: 0, y: -10 }}
